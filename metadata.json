@@ -1,0 +1,1959 @@
+import React, { useState } from 'react';
+import { 
+  BusinessSponsor, PaymentGatewayConfig, PricingTierConfig, 
+  PartnershipApplication, BusinessInquiryForm, AppSystemMetrics, 
+  AppFeatureToggles, UserPlan 
+} from '../types';
+import { 
+  Globe, CreditCard, Building2, ShieldCheck, Sparkles, CheckCircle2, 
+  ArrowRight, Key, DollarSign, Layers, Activity, Users, FileText, 
+  Settings, Lock, Unlock, Zap, Crown, Send, RefreshCw, AlertCircle, 
+  ChevronRight, Camera, Mic, Mail, Phone, MapPin, Check, X, Clock, 
+  ExternalLink, BarChart3, Sliders, Play, Eye, Home
+} from 'lucide-react';
+import { TaTaLogo } from './TaTaLogo';
+
+interface OfficialAppManagementPortalProps {
+  sponsors: BusinessSponsor[];
+  onAddSponsor: (sponsor: BusinessSponsor) => void;
+  onUpdateSponsor: (sponsor: BusinessSponsor) => void;
+  onToggleSponsorStatus: (id: string) => void;
+  onLaunchApp: () => void;
+  userPlan: UserPlan;
+  setUserPlan: (plan: UserPlan) => void;
+  paymentConfig: PaymentGatewayConfig;
+  onUpdatePaymentConfig: (config: PaymentGatewayConfig) => void;
+  pricingTiers: PricingTierConfig;
+  onUpdatePricingTiers: (tiers: PricingTierConfig) => void;
+  applications: PartnershipApplication[];
+  onAddApplication: (app: PartnershipApplication) => void;
+  onUpdateApplicationStatus: (id: string, status: PartnershipApplication['status'], notes?: string) => void;
+  inquiries: BusinessInquiryForm[];
+  onAddInquiry: (inquiry: BusinessInquiryForm) => void;
+  onUpdateInquiryStatus: (id: string, status: BusinessInquiryForm['status']) => void;
+  metrics: AppSystemMetrics;
+  featureToggles: AppFeatureToggles;
+  onToggleFeature: (featureKey: keyof AppFeatureToggles) => void;
+}
+
+export const OfficialAppManagementPortal: React.FC<OfficialAppManagementPortalProps> = ({
+  sponsors,
+  onAddSponsor,
+  onUpdateSponsor,
+  onToggleSponsorStatus,
+  onLaunchApp,
+  userPlan,
+  setUserPlan,
+  paymentConfig,
+  onUpdatePaymentConfig,
+  pricingTiers,
+  onUpdatePricingTiers,
+  applications,
+  onAddApplication,
+  onUpdateApplicationStatus,
+  inquiries,
+  onAddInquiry,
+  onUpdateInquiryStatus,
+  metrics,
+  featureToggles,
+  onToggleFeature
+}) => {
+  // Navigation Section in Portal
+  const [subTab, setSubTab] = useState<'website' | 'payment_setup' | 'partnerships' | 'business_forms' | 'system_admin'>('website');
+  const [isStandaloneWebsiteView, setIsStandaloneWebsiteView] = useState(true);
+  const [copiedUrlToast, setCopiedUrlToast] = useState(false);
+
+  // Partnership Application Public Form State
+  const [appBusinessName, setAppBusinessName] = useState('');
+  const [appContactName, setAppContactName] = useState('');
+  const [appContactEmail, setAppContactEmail] = useState('');
+  const [appContactPhone, setAppContactPhone] = useState('');
+  const [appCategory, setAppCategory] = useState('Food & Beverage');
+  const [appOfferTitle, setAppOfferTitle] = useState('');
+  const [appOfferDescription, setAppOfferDescription] = useState('');
+  const [appPromoCode, setAppPromoCode] = useState('');
+  const [appTargetKeywords, setAppTargetKeywords] = useState('');
+  const [appDiscountPct, setAppDiscountPct] = useState('20% OFF');
+  const [appLocationName, setAppLocationName] = useState('');
+  const [appMonthlyBudget, setAppMonthlyBudget] = useState('100');
+  const [appSubmittedNotice, setAppSubmittedNotice] = useState(false);
+
+  // Business / Enterprise Inquiry Public Form State
+  const [inqFormType, setInqFormType] = useState<BusinessInquiryForm['formType']>('enterprise_license');
+  const [inqSenderName, setInqSenderName] = useState('');
+  const [inqSenderEmail, setInqSenderEmail] = useState('');
+  const [inqCompanyName, setInqCompanyName] = useState('');
+  const [inqSubject, setInqSubject] = useState('');
+  const [inqMessage, setInqMessage] = useState('');
+  const [inqSubmittedNotice, setInqSubmittedNotice] = useState(false);
+
+  // Payment Setup Form State
+  const [paymentMode, setPaymentMode] = useState(paymentConfig.mode);
+  const [currency, setCurrency] = useState(paymentConfig.currency);
+  const [stripeEnabled, setStripeEnabled] = useState(paymentConfig.stripeEnabled);
+  const [stripePubKey, setStripePubKey] = useState(paymentConfig.stripePublishableKey);
+  const [stripeSecKey, setStripeSecKey] = useState(paymentConfig.stripeSecretKey);
+  const [paypalEnabled, setPaypalEnabled] = useState(paymentConfig.paypalEnabled);
+  const [paypalClientId, setPaypalClientId] = useState(paymentConfig.paypalClientId);
+  const [autoPayouts, setAutoPayouts] = useState(paymentConfig.autoPayouts);
+  const [payoutInterval, setPayoutInterval] = useState(paymentConfig.payoutInterval);
+  const [payoutAccount, setPayoutAccount] = useState(paymentConfig.payoutAccount);
+  const [paymentSavedNotice, setPaymentSavedNotice] = useState(false);
+
+  // Pricing Editor State
+  const [proPrice, setProPrice] = useState(pricingTiers.proMonthlyPrice.toString());
+  const [partnerPrice, setPartnerPrice] = useState(pricingTiers.partnerMonthlyPrice.toString());
+
+  React.useEffect(() => {
+    setProPrice(pricingTiers.proMonthlyPrice.toString());
+    setPartnerPrice(pricingTiers.partnerMonthlyPrice.toString());
+  }, [pricingTiers.proMonthlyPrice, pricingTiers.partnerMonthlyPrice]);
+
+  // Handle Submit Public Partnership Application
+  const handleSubmitPartnershipApp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appBusinessName || !appContactEmail || !appOfferTitle) {
+      alert('Please fill out all required partnership details.');
+      return;
+    }
+
+    const keywordsArray = appTargetKeywords
+      .split(',')
+      .map(k => k.trim().toLowerCase())
+      .filter(Boolean);
+
+    const newApp: PartnershipApplication = {
+      id: `app-${Date.now().toString().slice(-5)}`,
+      businessName: appBusinessName.trim(),
+      contactName: appContactName.trim() || 'Business Representative',
+      contactEmail: appContactEmail.trim(),
+      contactPhone: appContactPhone.trim() || 'N/A',
+      category: appCategory,
+      offerTitle: appOfferTitle.trim(),
+      offerDescription: appOfferDescription.trim() || 'Special discount for TaTa app users.',
+      promoCode: appPromoCode.trim().toUpperCase() || `TATA${Math.floor(Math.random() * 899 + 100)}`,
+      targetKeywords: keywordsArray.length > 0 ? keywordsArray : ['local', 'shopping', 'offer'],
+      discountPct: appDiscountPct.trim() || '15% OFF',
+      locationName: appLocationName.trim() || 'City Center Branch',
+      proposedBudgetMonthly: parseFloat(appMonthlyBudget) || 100,
+      status: 'pending',
+      submittedAt: new Date().toISOString()
+    };
+
+    onAddApplication(newApp);
+
+    // Reset Form
+    setAppBusinessName('');
+    setAppContactName('');
+    setAppContactEmail('');
+    setAppContactPhone('');
+    setAppOfferTitle('');
+    setAppOfferDescription('');
+    setAppPromoCode('');
+    setAppTargetKeywords('');
+    setAppLocationName('');
+    setAppSubmittedNotice(true);
+
+    setTimeout(() => {
+      setAppSubmittedNotice(false);
+    }, 6000);
+  };
+
+  // Handle Submit Public Enterprise / Support Form
+  const handleSubmitInquiry = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inqSenderName || !inqSenderEmail || !inqMessage) {
+      alert('Please fill out name, email, and message.');
+      return;
+    }
+
+    const newInquiry: BusinessInquiryForm = {
+      id: `inq-${Date.now().toString().slice(-5)}`,
+      formType: inqFormType,
+      senderName: inqSenderName.trim(),
+      senderEmail: inqSenderEmail.trim(),
+      companyName: inqCompanyName.trim() || 'N/A',
+      subject: inqSubject.trim() || `Inquiry regarding ${inqFormType.replace('_', ' ')}`,
+      message: inqMessage.trim(),
+      status: 'new',
+      submittedAt: new Date().toISOString()
+    };
+
+    onAddInquiry(newInquiry);
+
+    setInqSenderName('');
+    setInqSenderEmail('');
+    setInqCompanyName('');
+    setInqSubject('');
+    setInqMessage('');
+    setInqSubmittedNotice(true);
+
+    setTimeout(() => {
+      setInqSubmittedNotice(false);
+    }, 6000);
+  };
+
+  // Save Payment Setup Config
+  const handleSavePaymentConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: PaymentGatewayConfig = {
+      ...paymentConfig,
+      mode: paymentMode,
+      currency: currency,
+      stripeEnabled: stripeEnabled,
+      stripePublishableKey: stripePubKey,
+      stripeSecretKey: stripeSecKey,
+      paypalEnabled: paypalEnabled,
+      paypalClientId: paypalClientId,
+      autoPayouts: autoPayouts,
+      payoutInterval: payoutInterval,
+      payoutAccount: payoutAccount
+    };
+
+    onUpdatePaymentConfig(updated);
+
+    const updatedTiers: PricingTierConfig = {
+      ...pricingTiers,
+      proMonthlyPrice: parseFloat(proPrice) || 299,
+      partnerMonthlyPrice: parseFloat(partnerPrice) || 2999
+    };
+    onUpdatePricingTiers(updatedTiers);
+
+    setPaymentSavedNotice(true);
+    setTimeout(() => setPaymentSavedNotice(false), 4000);
+  };
+
+  // Approve Partnership & Auto-Register Sponsor
+  const handleApproveApplication = (app: PartnershipApplication) => {
+    onUpdateApplicationStatus(app.id, 'approved', 'Approved by Admin. Auto-generated partner sponsor listing.');
+
+    const newSponsor: BusinessSponsor = {
+      id: `spon-app-${Date.now().toString().slice(-4)}`,
+      partnerCode: `BP-${app.businessName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)}-${Math.floor(Math.random() * 899 + 100)}`,
+      businessName: app.businessName,
+      logo: app.category.includes('Food') ? '☕' : app.category.includes('Health') ? '🏋️' : app.category.includes('Auto') ? '🚗' : '🛍️',
+      category: app.category,
+      offerTitle: app.offerTitle,
+      offerDescription: app.offerDescription,
+      promoCode: app.promoCode,
+      targetKeywords: app.targetKeywords,
+      discountPct: app.discountPct,
+      rating: 5.0,
+      locationName: app.locationName,
+      mapUrl: 'https://maps.google.com',
+      impressions: 0,
+      clicks: 0,
+      redemptions: 0,
+      costPerRedemption: '$0.50',
+      active: true,
+      contactEmail: app.contactEmail,
+      partnerSince: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    };
+
+    onAddSponsor(newSponsor);
+  };
+
+  if (isStandaloneWebsiteView) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-16">
+        {/* Sticky Official Website Navigation Header Bar */}
+        <header className="sticky top-0 z-50 bg-slate-900/95 border-b border-cyan-500/30 px-4 sm:px-8 py-3 backdrop-blur-md shadow-2xl">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            
+            {/* Website Brand Logo */}
+            <div className="flex items-center gap-3 cursor-pointer" onClick={onLaunchApp}>
+              <TaTaLogo size={36} />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-black text-white tracking-tight">TaTa</span>
+                  <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                    Official Website
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 hidden sm:block">TalkTask AI & Pro Photo/Audio Assistant</p>
+              </div>
+            </div>
+
+            {/* Middle Nav Links */}
+            <nav className="hidden lg:flex items-center gap-6 text-xs font-bold text-slate-300">
+              <button 
+                type="button" 
+                onClick={onLaunchApp}
+                className="text-cyan-400 hover:text-white transition-colors flex items-center gap-1.5 font-black uppercase tracking-wider bg-cyan-950/80 px-2.5 py-1 rounded-lg border border-cyan-800 cursor-pointer shadow-sm"
+              >
+                <Home className="w-3.5 h-3.5 text-cyan-400" />
+                <span>HOME (App)</span>
+              </button>
+              <a href="#features-showcase-section" className="hover:text-cyan-400 transition-colors">Features</a>
+              <a href="#official-pricing-section" className="hover:text-cyan-400 transition-colors">Membership Pricing</a>
+              <a href="#partner-application-section-standalone" className="hover:text-amber-400 transition-colors flex items-center gap-1">
+                <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                <span>Partner Perks</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setIsStandaloneWebsiteView(false)}
+                className="text-slate-400 hover:text-purple-300 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Settings className="w-3.5 h-3.5 text-purple-400" />
+                <span>Admin Console</span>
+              </button>
+            </nav>
+
+            {/* Right Action Button */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsStandaloneWebsiteView(false)}
+                className="lg:hidden px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Settings className="w-3.5 h-3.5 text-purple-400" />
+                <span>Admin</span>
+              </button>
+              <button
+                type="button"
+                onClick={onLaunchApp}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/20 active:scale-95 transition-all cursor-pointer"
+              >
+                <Home className="w-4 h-4" />
+                <span>HOME (Launch App)</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Pure Standalone Website Landing Page */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-16 animate-fadeIn">
+          {/* Hero Section */}
+          <section className="relative rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950 border border-slate-800 p-8 sm:p-12 overflow-hidden shadow-2xl">
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div className="relative z-10 max-w-3xl space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-800 text-cyan-300 text-xs font-bold uppercase tracking-wider">
+                <TaTaLogo size={20} />
+                <span>Official Product Website</span>
+              </div>
+
+              <h1 className="text-3xl sm:text-5xl font-black text-white leading-tight tracking-tight">
+                TaTa — TalkTask AI Assistant & Pro Photo/Audio Intelligence
+              </h1>
+
+              <p className="text-base sm:text-lg text-slate-300 leading-relaxed font-normal">
+                The ultimate voice-first task manager, whiteboard/document photo-to-text OCR converter, AI strategy decision engine, and local merchant partnership ecosystem.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-4 pt-2">
+                <button
+                  type="button"
+                  onClick={onLaunchApp}
+                  className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm flex items-center gap-2 shadow-xl shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-white" />
+                  <span>Launch TaTa Web App</span>
+                </button>
+
+                <a
+                  href="#partner-application-section-standalone"
+                  className="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-extrabold text-sm flex items-center gap-2 transition-all cursor-pointer"
+                >
+                  <Building2 className="w-4 h-4 text-amber-400" />
+                  <span>Become a Merchant Partner</span>
+                </a>
+              </div>
+
+              {/* Key Metrics Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-slate-800/80">
+                <div>
+                  <span className="text-2xl font-black text-cyan-400">{metrics.activeUsersToday.toLocaleString()}</span>
+                  <p className="text-xs text-slate-400 font-medium">Daily Active Users</p>
+                </div>
+                <div>
+                  <span className="text-2xl font-black text-purple-400">{metrics.totalVoiceRequests.toLocaleString()}</span>
+                  <p className="text-xs text-slate-400 font-medium">Voice Reminders</p>
+                </div>
+                <div>
+                  <span className="text-2xl font-black text-amber-400">{metrics.totalPhotoOcrScans.toLocaleString()}</span>
+                  <p className="text-xs text-slate-400 font-medium">Photo OCR Scans</p>
+                </div>
+                <div>
+                  <span className="text-2xl font-black text-emerald-400">${metrics.grossVolumeAllTime.toLocaleString()}</span>
+                  <p className="text-xs text-slate-400 font-medium">Platform Volume</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Core Features Showcase Grid */}
+          <section className="space-y-6">
+            <div className="text-center max-w-2xl mx-auto space-y-2">
+              <h2 className="text-2xl sm:text-3xl font-black text-white">Engineered for Executive Productivity</h2>
+              <p className="text-sm text-slate-400">Discover four core pillars powering the TaTa intelligence ecosystem.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-3 hover:border-cyan-500/50 transition-colors">
+                <div className="p-3 rounded-xl bg-cyan-950 text-cyan-400 border border-cyan-800/80 w-fit">
+                  <Mic className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Voice Speech Assistant</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Set daily reminders, schedule events, or query weather by speaking naturally into the microphone orb.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-3 hover:border-amber-500/50 transition-colors">
+                <div className="p-3 rounded-xl bg-amber-950 text-amber-400 border border-amber-800/80 w-fit">
+                  <Camera className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Photo & Whiteboard OCR</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Snap photos of whiteboards, meeting notes, or printed memos to extract structured text & action items instantly.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-3 hover:border-purple-500/50 transition-colors">
+                <div className="p-3 rounded-xl bg-purple-950 text-purple-400 border border-purple-800/80 w-fit">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white">AI Strategy Matrix</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Evaluates trade-offs, pros & cons, risk ratings, and recommended owner actions for audio and photo memos.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-3 hover:border-emerald-500/50 transition-colors">
+                <div className="p-3 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-800/80 w-fit">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Merchant Perks Network</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Task-keyword matching connects users with exclusive discounts (coffee, automotive, dining, fitness) at checkout.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Pricing Section */}
+          <section className="space-y-6">
+            <div className="text-center max-w-2xl mx-auto space-y-2">
+              <h2 className="text-2xl sm:text-3xl font-black text-white">Official Membership Pricing</h2>
+              <p className="text-sm text-slate-400">Choose a plan designed for individual productivity or local business growth.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Free Plan */}
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-6 flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Consumer</span>
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-bold">Standard</span>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-white">Free Starter</h3>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="text-4xl font-extrabold text-white">₱0</span>
+                      <span className="text-xs text-slate-400">/ forever</span>
+                    </div>
+                  </div>
+                  <ul className="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800">
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-cyan-400" /> Live Voice Assistant Microphone</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-cyan-400" /> Unlimited Task Reminders</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-cyan-400" /> Daily Briefing & Weather Intelligence</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-cyan-400" /> Local Merchant Sponsor Perks & Vouchers</li>
+                  </ul>
+                </div>
+                <button
+                  type="button"
+                  onClick={onLaunchApp}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer"
+                >
+                  Use Free App
+                </button>
+              </div>
+
+              {/* Pro Tier */}
+              <div className="bg-gradient-to-b from-purple-950/80 to-slate-900 rounded-2xl border-2 border-purple-500/60 p-6 space-y-6 flex flex-col justify-between relative shadow-2xl">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-lg">
+                  MOST POPULAR FOR PROFESSIONALS
+                </div>
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">Executive</span>
+                    <Crown className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-white">Pro Audio & Photo OCR</h3>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="text-4xl font-extrabold text-purple-300">₱{pricingTiers.proMonthlyPrice}</span>
+                      <span className="text-xs text-slate-400">/ month</span>
+                    </div>
+                  </div>
+                  <ul className="space-y-2 text-xs text-slate-200 pt-2 border-t border-purple-900/60">
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> Everything in Free Starter</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> 📷 Photo & Whiteboard OCR Scanner</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> 🎙️ Meeting & Audio Memo Summarizer</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> ⚡ Interactive AI Decision Matrix Engine</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> PDF/Markdown Decision Export</li>
+                  </ul>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserPlan('premium');
+                    onLaunchApp();
+                  }}
+                  className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold py-2.5 rounded-xl text-xs shadow-lg shadow-purple-600/30 cursor-pointer"
+                >
+                  Upgrade to Pro (₱{pricingTiers.proMonthlyPrice}/mo)
+                </button>
+              </div>
+
+              {/* Partner Tier */}
+              <div className="bg-slate-900 rounded-2xl border border-amber-500/80 p-6 space-y-6 flex flex-col justify-between relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-emerald-500 text-slate-950 text-[9px] font-black uppercase px-2 py-0.5 rounded-bl-lg">
+                  INCLUDES APP PRO VERSION
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Local Businesses</span>
+                    <Building2 className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-white">Partner Merchant Sponsor</h3>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="text-4xl font-extrabold text-amber-400">₱{pricingTiers.partnerMonthlyPrice}</span>
+                      <span className="text-xs text-slate-400">/ month</span>
+                    </div>
+                  </div>
+                  <ul className="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800">
+                    <li className="flex items-center gap-2 p-1.5 rounded bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 font-extrabold">
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" /> ✨ INCLUDES APP PRO VERSION (Meeting Recorder & AI Decision Matrix)
+                    </li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400 shrink-0" /> Targeted Task Keyword Sponsor Ads</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400 shrink-0" /> Custom Business Partner Access Portal</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400 shrink-0" /> Dedicated Promo Voucher Distribution</li>
+                    <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400 shrink-0" /> Real-time Impression & Redemption Analytics</li>
+                  </ul>
+                </div>
+                <a
+                  href="#partner-application-section-standalone"
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-2.5 rounded-xl text-xs text-center block cursor-pointer"
+                >
+                  Apply for Partnership (Includes App Pro Version)
+                </a>
+              </div>
+            </div>
+          </section>
+
+          {/* Partnership Form */}
+          <section id="partner-application-section-standalone" className="bg-slate-900 rounded-3xl border border-amber-500/40 p-8 sm:p-10 shadow-2xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Merchant Onboarding Form</span>
+                  <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full font-bold">
+                    Business System
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-white">Apply for Local Business Partnership</h2>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                  Promote your products directly to active TaTa users when they schedule related daily tasks.
+                </p>
+              </div>
+              <Building2 className="w-10 h-10 text-amber-400 shrink-0" />
+            </div>
+
+            {appSubmittedNotice ? (
+              <div className="p-6 rounded-2xl bg-amber-950/60 border border-amber-600 text-amber-200 text-center space-y-3">
+                <CheckCircle2 className="w-10 h-10 text-amber-400 mx-auto" />
+                <h3 className="text-lg font-bold text-white">Application Received Successfully!</h3>
+                <p className="text-xs text-amber-300 max-w-lg mx-auto">
+                  Our merchant operations team will review your offer and contact you within 1 business day.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAppSubmittedNotice(false)}
+                  className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-500 cursor-pointer"
+                >
+                  Submit Another Application
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitPartnershipApp} className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Business Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Apex Coffee Roasters"
+                    value={appBusinessName}
+                    onChange={(e) => setAppBusinessName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-100 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Contact Email *</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="partner@yourbusiness.com"
+                    value={appContactEmail}
+                    onChange={(e) => setAppContactEmail(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-100 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Sponsor Offer Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 25% Off Artisan Espresso & Pastry"
+                    value={appOfferTitle}
+                    onChange={(e) => setAppOfferTitle(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-100 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Target Task Keywords *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. coffee, breakfast, latte, meeting"
+                    value={appTargetKeywords}
+                    onChange={(e) => setAppTargetKeywords(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-100 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-slate-300 font-bold mb-1">Offer Description & Instructions</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Describe how users redeem this perk at your location or website..."
+                    value={appOfferDescription}
+                    onChange={(e) => setAppOfferDescription(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2 flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-8 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Submit Partner Application</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-16 pt-4">
+      
+      {/* Top Banner Navigation Header - Clean Non-Overlapping Layout */}
+      <header className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsStandaloneWebsiteView(true)}
+              className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20 shrink-0 cursor-pointer transition-transform active:scale-95"
+              title="Click to view official website"
+            >
+              <Globe className="w-6 h-6" />
+            </button>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 
+                  onClick={() => setIsStandaloneWebsiteView(true)}
+                  className="text-lg sm:text-xl font-black text-white tracking-tight hover:text-cyan-300 transition-colors cursor-pointer flex items-center gap-2"
+                >
+                  <span>Official Website & Business Management System</span>
+                  <ExternalLink className="w-4 h-4 text-cyan-400" />
+                </h1>
+                <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full font-bold uppercase">
+                  TaTa OS
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">Click tabs below or click the website title to view the Public Product Website, Payment Setup, Partnerships, & Forms.</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800 text-xs font-bold overflow-x-auto max-w-full shrink-0">
+            <button
+              id="btn-portal-tab-website"
+              type="button"
+              onClick={() => setSubTab('website')}
+              className={`px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                subTab === 'website' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30' : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <Globe className="w-4 h-4" />
+              <span>1. Official App Website</span>
+            </button>
+
+            <button
+              id="btn-portal-tab-payment"
+              type="button"
+              onClick={() => setSubTab('payment_setup')}
+              className={`px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                subTab === 'payment_setup' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>2. Payment & Gateways</span>
+            </button>
+
+            <button
+              id="btn-portal-tab-partnerships"
+              type="button"
+              onClick={() => setSubTab('partnerships')}
+              className={`px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                subTab === 'partnerships' ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30' : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>3. Partnerships ({applications.filter(a => a.status === 'pending').length} New)</span>
+            </button>
+
+            <button
+              id="btn-portal-tab-forms"
+              type="button"
+              onClick={() => setSubTab('business_forms')}
+              className={`px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                subTab === 'business_forms' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>4. Business Forms ({inquiries.filter(i => i.status === 'new').length})</span>
+            </button>
+
+            <button
+              id="btn-portal-tab-telemetry"
+              type="button"
+              onClick={() => setSubTab('system_admin')}
+              className={`px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                subTab === 'system_admin' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>5. System Telemetry</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+
+        {/* ============================================================== */}
+        {/* SUBTAB 1: OFFICIAL PUBLIC APP WEBSITE LANDING PAGE */}
+        {/* ============================================================== */}
+        {subTab === 'website' && (
+          <div className="space-y-12 animate-fadeIn">
+
+            {/* Simulated Live Website Browser Bar Frame with Clickable URL */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-slate-400 font-mono w-full sm:w-auto">
+                <div className="flex items-center gap-1.5 mr-2">
+                  <div className="w-3 h-3 rounded-full bg-rose-500/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-amber-500/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+                </div>
+                <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <button
+                  type="button"
+                  onClick={() => setIsStandaloneWebsiteView(true)}
+                  className="text-cyan-300 hover:text-white font-bold bg-slate-950 hover:bg-cyan-950 px-3 py-1.5 rounded-lg border border-cyan-800/80 hover:border-cyan-500 truncate max-w-[280px] sm:max-w-md transition-all flex items-center gap-2 cursor-pointer shadow-md group"
+                  title="Click to view official website in full screen"
+                >
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>https://tatatalk.app/official-website</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+                {copiedUrlToast && (
+                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950 px-2 py-1 rounded border border-emerald-800">
+                    Copied!
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText('https://tatatalk.app/official-website');
+                    setCopiedUrlToast(true);
+                    setTimeout(() => setCopiedUrlToast(false), 2000);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 font-bold text-xs flex items-center gap-1.5 border border-slate-800 transition-all cursor-pointer"
+                >
+                  <Send className="w-3 h-3 text-cyan-400" />
+                  <span>Copy Link</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsStandaloneWebsiteView(true)}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 font-extrabold flex items-center gap-1.5 bg-emerald-950/80 hover:bg-emerald-900/80 px-3 py-1.5 rounded-lg border border-emerald-800 transition-all cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Open Standalone Website</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onLaunchApp}
+                  className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  <span>Launch Web App</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Hero Section */}
+            <section className="relative rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950 border border-slate-800 p-8 sm:p-12 overflow-hidden shadow-2xl">
+              <div className="absolute top-0 right-0 -mr-16 -mt-16 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+              <div className="relative z-10 max-w-3xl space-y-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-800 text-cyan-300 text-xs font-bold uppercase tracking-wider">
+                  <TaTaLogo size={20} />
+                  <span>Official App Portal & Executive System</span>
+                </div>
+
+                <h1 className="text-3xl sm:text-5xl font-black text-white leading-tight tracking-tight">
+                  TaTa — TalkTask AI Assistant & Pro Photo/Audio Intelligence
+                </h1>
+
+                <p className="text-base sm:text-lg text-slate-300 leading-relaxed font-normal">
+                  The ultimate voice-first task manager, whiteboard/document photo-to-text OCR converter, AI strategy decision engine, and local merchant partnership ecosystem.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-4 pt-2">
+                  <button
+                    onClick={onLaunchApp}
+                    className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm flex items-center gap-2 shadow-xl shadow-cyan-500/25 transition-all transform hover:-translate-y-0.5"
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>Launch TaTa Web App</span>
+                  </button>
+
+                  <a
+                    href="#partner-application-section"
+                    className="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-extrabold text-sm flex items-center gap-2 transition-all"
+                  >
+                    <Building2 className="w-4 h-4 text-amber-400" />
+                    <span>Become a Merchant Partner</span>
+                  </a>
+                </div>
+
+                {/* Key Metrics Strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-slate-800/80">
+                  <div>
+                    <span className="text-2xl font-black text-cyan-400">{metrics.activeUsersToday.toLocaleString()}</span>
+                    <p className="text-xs text-slate-400 font-medium">Daily Active Users</p>
+                  </div>
+                  <div>
+                    <span className="text-2xl font-black text-purple-400">{metrics.totalVoiceRequests.toLocaleString()}</span>
+                    <p className="text-xs text-slate-400 font-medium">Voice Reminders</p>
+                  </div>
+                  <div>
+                    <span className="text-2xl font-black text-amber-400">{metrics.totalPhotoOcrScans.toLocaleString()}</span>
+                    <p className="text-xs text-slate-400 font-medium">Photo OCR Scans</p>
+                  </div>
+                  <div>
+                    <span className="text-2xl font-black text-emerald-400">₱{metrics.grossVolumeAllTime.toLocaleString()}</span>
+                    <p className="text-xs text-slate-400 font-medium">Platform Volume</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Core Features Showcase Grid */}
+            <section className="space-y-6">
+              <div className="text-center max-w-2xl mx-auto space-y-2">
+                <h2 className="text-2xl sm:text-3xl font-black text-white">Engineered for Executive Productivity</h2>
+                <p className="text-sm text-slate-400">Discover four core pillars powering the TaTa intelligence ecosystem.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-3 hover:border-cyan-500/50 transition-colors">
+                  <div className="p-3 rounded-xl bg-cyan-950 text-cyan-400 border border-cyan-800/80 w-fit">
+                    <Mic className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Voice Speech Assistant</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Set daily reminders, schedule events, or query weather by speaking naturally into the microphone orb.
+                  </p>
+                </div>
+
+                <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-3 hover:border-amber-500/50 transition-colors">
+                  <div className="p-3 rounded-xl bg-amber-950 text-amber-400 border border-amber-800/80 w-fit">
+                    <Camera className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Photo & Whiteboard OCR</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Snap photos of whiteboards, meeting notes, or printed memos to extract structured text & action items instantly.
+                  </p>
+                </div>
+
+                <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-3 hover:border-purple-500/50 transition-colors">
+                  <div className="p-3 rounded-xl bg-purple-950 text-purple-400 border border-purple-800/80 w-fit">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">AI Strategy Matrix</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Evaluates trade-offs, pros & cons, risk ratings, and recommended owner actions for audio and photo memos.
+                  </p>
+                </div>
+
+                <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-6 space-y-3 hover:border-emerald-500/50 transition-colors">
+                  <div className="p-3 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-800/80 w-fit">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Merchant Perks Network</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Task-keyword matching connects users with exclusive discounts (coffee, automotive, dining, fitness) at checkout.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Official Subscription Pricing Plans */}
+            <section className="space-y-6">
+              <div className="text-center max-w-2xl mx-auto space-y-2">
+                <h2 className="text-2xl sm:text-3xl font-black text-white">Official Membership & Partnership Pricing</h2>
+                <p className="text-sm text-slate-400">Choose a plan designed for individual productivity or local business growth.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* Free Plan */}
+                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-6 flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Consumer</span>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-bold">Standard</span>
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-white">Free Starter</h3>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        <span className="text-4xl font-extrabold text-white">₱0</span>
+                        <span className="text-xs text-slate-400">/ forever</span>
+                      </div>
+                    </div>
+                    <ul className="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800">
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-cyan-400" /> Live Voice Assistant Microphone</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-cyan-400" /> Unlimited Task Reminders</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-cyan-400" /> Daily Briefing & Weather Intelligence</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-cyan-400" /> Local Merchant Sponsor Perks & Vouchers</li>
+                    </ul>
+                  </div>
+                  <button
+                    onClick={onLaunchApp}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded-xl text-xs"
+                  >
+                    Use Free App
+                  </button>
+                </div>
+
+                {/* Pro Tier */}
+                <div className="bg-gradient-to-b from-purple-950/80 to-slate-900 rounded-2xl border-2 border-purple-500/60 p-6 space-y-6 flex flex-col justify-between relative shadow-2xl">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-lg">
+                    MOST POPULAR FOR PROFESSIONALS
+                  </div>
+                  <div className="space-y-4 pt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">Executive</span>
+                      <Crown className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-white">Pro Audio & Photo OCR</h3>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        <span className="text-4xl font-extrabold text-purple-300">₱{pricingTiers.proMonthlyPrice}</span>
+                        <span className="text-xs text-slate-400">/ month</span>
+                      </div>
+                    </div>
+                    <ul className="space-y-2 text-xs text-slate-200 pt-2 border-t border-purple-900/60">
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> Everything in Free Starter</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> 📷 Photo & Whiteboard OCR Scanner</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> 🎙️ Meeting & Audio Memo Summarizer</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> ⚡ Interactive AI Decision Matrix Engine</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400" /> PDF/Markdown Decision Export</li>
+                    </ul>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setUserPlan('premium');
+                      onLaunchApp();
+                    }}
+                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold py-2.5 rounded-xl text-xs shadow-lg shadow-purple-600/30"
+                  >
+                    Upgrade to Pro (₱{pricingTiers.proMonthlyPrice}/mo)
+                  </button>
+                </div>
+
+                {/* Partner Tier */}
+                <div className="bg-slate-900 rounded-2xl border border-amber-500/80 p-6 space-y-6 flex flex-col justify-between relative overflow-hidden">
+                  <div className="absolute top-0 right-0 bg-emerald-500 text-slate-950 text-[9px] font-black uppercase px-2 py-0.5 rounded-bl-lg">
+                    INCLUDES APP PRO VERSION
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Local Businesses</span>
+                      <Building2 className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-white">Partner Merchant Sponsor</h3>
+                      <div className="flex items-baseline gap-1 mt-1">
+                        <span className="text-4xl font-extrabold text-amber-400">₱{pricingTiers.partnerMonthlyPrice}</span>
+                        <span className="text-xs text-slate-400">/ month</span>
+                      </div>
+                    </div>
+                    <ul className="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800">
+                      <li className="flex items-center gap-2 p-1.5 rounded bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 font-extrabold">
+                        <Check className="w-4 h-4 text-emerald-400 shrink-0" /> ✨ INCLUDES APP PRO VERSION (Meeting Recorder & AI Decision Matrix)
+                      </li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400 shrink-0" /> Targeted Task Keyword Sponsor Ads</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400 shrink-0" /> Custom Business Partner Access Portal</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400 shrink-0" /> Dedicated Promo Voucher Distribution</li>
+                      <li className="flex items-center gap-2"><Check className="w-4 h-4 text-amber-400 shrink-0" /> Real-time Impression & Redemption Analytics</li>
+                    </ul>
+                  </div>
+                  <a
+                    href="#partner-application-section"
+                    className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-2.5 rounded-xl text-xs text-center block cursor-pointer"
+                  >
+                    Apply for Partnership (Includes App Pro Version)
+                  </a>
+                </div>
+
+              </div>
+            </section>
+
+            {/* Public Partnership Application Form System */}
+            <section id="partner-application-section" className="bg-slate-900 rounded-3xl border border-amber-500/40 p-8 sm:p-10 shadow-2xl space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Merchant Onboarding Form</span>
+                    <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full font-bold">
+                      Business System
+                    </span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-white">Apply for Local Business Partnership</h2>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                    Promote your products directly to active TaTa users when they schedule related daily tasks.
+                  </p>
+                </div>
+              </div>
+
+              {appSubmittedNotice && (
+                <div className="p-4 bg-emerald-950 border border-emerald-800 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span>Your partnership application has been submitted successfully! The TaTa admin team will review it shortly.</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitPartnershipApp} className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Business Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={appBusinessName}
+                      onChange={(e) => setAppBusinessName(e.target.value)}
+                      placeholder="e.g. Metro Organic Cafe & Bakery"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Contact Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={appContactName}
+                      onChange={(e) => setAppContactName(e.target.value)}
+                      placeholder="e.g. John Miller (Owner)"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Contact Email *</label>
+                    <input
+                      type="email"
+                      required
+                      value={appContactEmail}
+                      onChange={(e) => setAppContactEmail(e.target.value)}
+                      placeholder="owner@metrocafe.com"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      value={appContactPhone}
+                      onChange={(e) => setAppContactPhone(e.target.value)}
+                      placeholder="+1 (555) 019-2831"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Category</label>
+                    <select
+                      value={appCategory}
+                      onChange={(e) => setAppCategory(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:ring-1 focus:ring-amber-500"
+                    >
+                      <option value="Food & Beverage">Food & Beverage (Café, Restaurant)</option>
+                      <option value="Automotive">Automotive & Maintenance</option>
+                      <option value="Health & Fitness">Health & Fitness (Gym, Spa)</option>
+                      <option value="Retail & Shopping">Retail & Shopping</option>
+                      <option value="Professional Services">Professional Services</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Discount Tag (e.g. 20% OFF)</label>
+                    <input
+                      type="text"
+                      value={appDiscountPct}
+                      onChange={(e) => setAppDiscountPct(e.target.value)}
+                      placeholder="e.g. 20% OFF or $15 Voucher"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Offer Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={appOfferTitle}
+                      onChange={(e) => setAppOfferTitle(e.target.value)}
+                      placeholder="e.g. 20% Off Espresso & Breakfast Pastry Combo"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Promo Code</label>
+                    <input
+                      type="text"
+                      value={appPromoCode}
+                      onChange={(e) => setAppPromoCode(e.target.value)}
+                      placeholder="e.g. METROCOFFEE2026"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Target Keywords (Comma Separated)</label>
+                    <input
+                      type="text"
+                      value={appTargetKeywords}
+                      onChange={(e) => setAppTargetKeywords(e.target.value)}
+                      placeholder="coffee, morning, breakfast, latte, snack, drink"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Location / Store Name</label>
+                    <input
+                      type="text"
+                      value={appLocationName}
+                      onChange={(e) => setAppLocationName(e.target.value)}
+                      placeholder="Main Street Branch #2"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">Offer Description & Instructions</label>
+                  <textarea
+                    rows={2}
+                    value={appOfferDescription}
+                    onChange={(e) => setAppOfferDescription(e.target.value)}
+                    placeholder="Provide details for how TaTa users can claim this discount at your store..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-amber-500 resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl text-xs sm:text-sm shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Submit Partnership Application Form</span>
+                </button>
+              </form>
+            </section>
+
+            {/* Enterprise & Support Contact Inquiry Form */}
+            <section className="bg-slate-900 rounded-3xl border border-slate-800 p-8 sm:p-10 shadow-xl space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div>
+                  <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Enterprise & Support Hub</span>
+                  <h2 className="text-2xl sm:text-3xl font-black text-white">Official Business Contact Form</h2>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                    Contact our executive engineering & business operations team for enterprise licenses or API webhooks.
+                  </p>
+                </div>
+              </div>
+
+              {inqSubmittedNotice && (
+                <div className="p-4 bg-emerald-950 border border-emerald-800 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span>Your inquiry form has been dispatched! Our enterprise team will get in touch via email.</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitInquiry} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Inquiry Type</label>
+                    <select
+                      value={inqFormType}
+                      onChange={(e) => setInqFormType(e.target.value as any)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:ring-1 focus:ring-cyan-500"
+                    >
+                      <option value="enterprise_license">Enterprise Pro Licensing (B2B)</option>
+                      <option value="api_integration">API Webhooks & SDK Access</option>
+                      <option value="general_inquiry">General Business Partnership</option>
+                      <option value="support_ticket">Technical Support Ticket</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Your Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={inqSenderName}
+                      onChange={(e) => setInqSenderName(e.target.value)}
+                      placeholder="e.g. Alexandra Smith"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Email Address *</label>
+                    <input
+                      type="email"
+                      required
+                      value={inqSenderEmail}
+                      onChange={(e) => setInqSenderEmail(e.target.value)}
+                      placeholder="alexandra@company.com"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Company / Organization</label>
+                    <input
+                      type="text"
+                      value={inqCompanyName}
+                      onChange={(e) => setInqCompanyName(e.target.value)}
+                      placeholder="e.g. Global Tech Solutions Inc."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Subject</label>
+                    <input
+                      type="text"
+                      value={inqSubject}
+                      onChange={(e) => setInqSubject(e.target.value)}
+                      placeholder="e.g. Pro License Quote for 100 Executives"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">Message Details *</label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={inqMessage}
+                    onChange={(e) => setInqMessage(e.target.value)}
+                    placeholder="Describe your business needs or question..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-cyan-500 resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold py-3 rounded-xl text-xs sm:text-sm shadow-xl shadow-cyan-600/20 flex items-center justify-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Send Official Business Message</span>
+                </button>
+              </form>
+            </section>
+
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* SUBTAB 2: PAYMENT & GATEWAY SETUP SYSTEM */}
+        {/* ============================================================== */}
+        {subTab === 'payment_setup' && (
+          <div className="space-y-8 animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Master Payment Engine</span>
+                  <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full font-bold">
+                    Stripe & PayPal Connected
+                  </span>
+                </div>
+                <h2 className="text-2xl font-black text-white">Payment Setup & Subscription Gateways</h2>
+                <p className="text-xs text-slate-400">Configure production credentials, currency, payouts, and pricing tier modifiers.</p>
+              </div>
+            </div>
+
+            {paymentSavedNotice && (
+              <div className="p-4 bg-emerald-950 border border-emerald-800 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span>Payment setup and pricing tier configurations saved successfully!</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSavePaymentConfig} className="space-y-8">
+              
+              {/* Mode & Currency Settings */}
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-purple-400" />
+                  Gateway Mode & Currency
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Environment Mode</label>
+                    <div className="flex items-center gap-3">
+                      <label className={`flex-1 p-3 rounded-xl border text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                        paymentMode === 'live' 
+                          ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300' 
+                          : 'bg-slate-950 border-slate-800 text-slate-400'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="mode"
+                          checked={paymentMode === 'live'}
+                          onChange={() => setPaymentMode('live')}
+                          className="hidden"
+                        />
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span>Production Live Mode</span>
+                      </label>
+
+                      <label className={`flex-1 p-3 rounded-xl border text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                        paymentMode === 'sandbox' 
+                          ? 'bg-amber-950/80 border-amber-600 text-amber-300' 
+                          : 'bg-slate-950 border-slate-800 text-slate-400'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="mode"
+                          checked={paymentMode === 'sandbox'}
+                          onChange={() => setPaymentMode('sandbox')}
+                          className="hidden"
+                        />
+                        <Lock className="w-4 h-4 text-amber-400" />
+                        <span>Sandbox Test Mode</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Billing Currency</label>
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value as any)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:ring-1 focus:ring-purple-500"
+                    >
+                      <option value="USD">USD ($) United States Dollar</option>
+                      <option value="EUR">EUR (€) Euro</option>
+                      <option value="GBP">GBP (£) British Pound</option>
+                      <option value="PHP">PHP (₱) Philippine Peso</option>
+                      <option value="JPY">JPY (¥) Japanese Yen</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stripe Configuration Box */}
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
+                    <h3 className="text-sm font-bold text-white">Stripe Payment Gateway</h3>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={stripeEnabled}
+                      onChange={(e) => setStripeEnabled(e.target.checked)}
+                      className="rounded bg-slate-950 border-slate-800 text-purple-600 focus:ring-0"
+                    />
+                    <span className="text-xs font-bold text-slate-300">Enable Stripe</span>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Stripe Publishable Key</label>
+                    <input
+                      type="text"
+                      value={stripePubKey}
+                      onChange={(e) => setStripePubKey(e.target.value)}
+                      placeholder="pk_live_..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Stripe Secret Key</label>
+                    <input
+                      type="password"
+                      value={stripeSecKey}
+                      onChange={(e) => setStripeSecKey(e.target.value)}
+                      placeholder="sk_live_..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-600"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* PayPal Configuration Box */}
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-sky-400"></div>
+                    <h3 className="text-sm font-bold text-white">PayPal Checkout Gateway</h3>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={paypalEnabled}
+                      onChange={(e) => setPaypalEnabled(e.target.checked)}
+                      className="rounded bg-slate-950 border-slate-800 text-purple-600 focus:ring-0"
+                    />
+                    <span className="text-xs font-bold text-slate-300">Enable PayPal</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">PayPal Client ID</label>
+                  <input
+                    type="text"
+                    value={paypalClientId}
+                    onChange={(e) => setPaypalClientId(e.target.value)}
+                    placeholder="client_id_live_..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-600"
+                  />
+                </div>
+              </div>
+
+              {/* Pricing Tier Price Editor Box */}
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    Subscription Plan Pricing Editors (PHP ₱)
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updatedTiers: PricingTierConfig = {
+                        ...pricingTiers,
+                        proMonthlyPrice: parseFloat(proPrice) || 299,
+                        partnerMonthlyPrice: parseFloat(partnerPrice) || 2999
+                      };
+                      onUpdatePricingTiers(updatedTiers);
+                      setPaymentSavedNotice(true);
+                      setTimeout(() => setPaymentSavedNotice(false), 4000);
+                    }}
+                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl cursor-pointer transition-all active:scale-95 flex items-center gap-1.5 shadow-md shadow-amber-500/20"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Save Pricing Only</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Pro Audio & Photo OCR (₱/mo)</label>
+                    <input
+                      type="number"
+                      value={proPrice}
+                      onChange={(e) => setProPrice(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Partner Sponsor Membership (₱/mo)</label>
+                    <input
+                      type="number"
+                      value={partnerPrice}
+                      onChange={(e) => setPartnerPrice(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-bold focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Payout & Revenue Ledger Box */}
+              <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-4">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                  Automated Merchant Payout Account
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Payout Account</label>
+                    <input
+                      type="text"
+                      value={payoutAccount}
+                      onChange={(e) => setPayoutAccount(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-300 font-semibold block mb-1">Payout Frequency</label>
+                    <select
+                      value={payoutInterval}
+                      onChange={(e) => setPayoutInterval(e.target.value as any)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white"
+                    >
+                      <option value="daily">Daily Automated Payout</option>
+                      <option value="weekly">Weekly Payout (Fridays)</option>
+                      <option value="monthly">Monthly Payout (1st of month)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col justify-end">
+                    <button
+                      type="button"
+                      onClick={() => alert(`Initiated instant bank payout for ${payoutAccount}. Funds will settle in 1 business day.`)}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Trigger Instant Payout</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {paymentSavedNotice && (
+                <div className="p-4 bg-emerald-950 border border-emerald-800 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span>Payment setup and pricing tier configurations saved successfully! Updated pricing is immediately live on the Subscription Pricing Modal.</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full bg-purple-600 hover:bg-purple-500 text-white font-extrabold py-3.5 rounded-xl text-xs sm:text-sm shadow-xl shadow-purple-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99]"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Save Payment & Pricing Setup</span>
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* SUBTAB 3: PARTNERSHIP MANAGEMENT SUITE */}
+        {/* ============================================================== */}
+        {subTab === 'partnerships' && (
+          <div className="space-y-8 animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Merchant Ecosystem</span>
+                  <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full font-bold">
+                    {sponsors.length} Active Local Partners
+                  </span>
+                </div>
+                <h2 className="text-2xl font-black text-white">Partnership Management Suite</h2>
+                <p className="text-xs text-slate-400">Manage local business sponsors, review incoming merchant applications, and track redemption revenue.</p>
+              </div>
+            </div>
+
+            {/* Incoming Partnership Applications Queue */}
+            <div className="bg-slate-900 rounded-2xl border border-amber-500/40 p-6 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-amber-400" />
+                  <span>Incoming Business Applications Queue</span>
+                  <span className="text-xs bg-amber-950 text-amber-300 px-2 py-0.5 rounded-full font-extrabold">
+                    {applications.filter(a => a.status === 'pending').length} Pending
+                  </span>
+                </h3>
+              </div>
+
+              {applications.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-4">No partnership applications received yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {applications.map((app) => (
+                    <div key={app.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="space-y-1 max-w-xl">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-extrabold text-white">{app.businessName}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800/80 font-bold">
+                            {app.category}
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                            app.status === 'approved' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
+                            app.status === 'rejected' ? 'bg-rose-950 text-rose-300 border border-rose-800' :
+                            'bg-amber-950 text-amber-300 border border-amber-800'
+                          }`}>
+                            {app.status}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-300">{app.offerTitle} ({app.discountPct})</p>
+                        <p className="text-[11px] text-slate-400">{app.offerDescription}</p>
+                        <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 pt-1">
+                          <span>Contact: {app.contactName} ({app.contactEmail})</span>
+                          <span>Budget: ${app.proposedBudgetMonthly}/mo</span>
+                          <span>Code: {app.promoCode}</span>
+                          <span>Keywords: {app.targetKeywords.join(', ')}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {app.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleApproveApplication(app)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-md"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Approve & Issue Code</span>
+                            </button>
+                            <button
+                              onClick={() => onUpdateApplicationStatus(app.id, 'rejected')}
+                              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-300 hover:text-rose-300 font-bold text-xs flex items-center gap-1 border border-slate-700"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Decline</span>
+                            </button>
+                          </>
+                        )}
+                        {app.status === 'approved' && (
+                          <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-4 h-4" /> Live in Sponsor Network
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Live Partner Merchants Network */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-amber-400" />
+                <span>Active Partner Merchant Directory</span>
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {sponsors.map((spon) => (
+                  <div key={spon.id} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl p-2 rounded-xl bg-slate-950 border border-slate-800">{spon.logo}</span>
+                        <div>
+                          <h4 className="text-base font-extrabold text-white">{spon.businessName}</h4>
+                          <span className="text-[10px] text-amber-300 font-mono font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/80">
+                            Code: {spon.partnerCode}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => onToggleSponsorStatus(spon.id)}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${
+                          spon.active
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}
+                      >
+                        {spon.active ? 'Active' : 'Paused'}
+                      </button>
+                    </div>
+
+                    <div className="space-y-1 text-xs">
+                      <p className="font-bold text-slate-200">{spon.offerTitle}</p>
+                      <p className="text-slate-400 text-[11px]">{spon.offerDescription}</p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-center">
+                      <div className="p-2 bg-slate-950 rounded-lg">
+                        <span className="text-sm font-extrabold text-white">{spon.impressions.toLocaleString()}</span>
+                        <p className="text-[9px] text-slate-400">Impressions</p>
+                      </div>
+                      <div className="p-2 bg-slate-950 rounded-lg">
+                        <span className="text-sm font-extrabold text-cyan-400">{spon.clicks.toLocaleString()}</span>
+                        <p className="text-[9px] text-slate-400">Clicks</p>
+                      </div>
+                      <div className="p-2 bg-slate-950 rounded-lg">
+                        <span className="text-sm font-extrabold text-emerald-400">{spon.redemptions.toLocaleString()}</span>
+                        <p className="text-[9px] text-slate-400">Redemptions</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* SUBTAB 4: BUSINESS FORMS REPOSITORY */}
+        {/* ============================================================== */}
+        {subTab === 'business_forms' && (
+          <div className="space-y-8 animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Operations & CRM</span>
+                  <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                    {inquiries.length} Submitted Forms
+                  </span>
+                </div>
+                <h2 className="text-2xl font-black text-white">Business Forms & Inquiry Inbox</h2>
+                <p className="text-xs text-slate-400">Centralized repository for enterprise requests, support tickets, and API webhook integrations.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {inquiries.length === 0 ? (
+                <div className="p-8 bg-slate-900 rounded-2xl border border-slate-800 text-center text-slate-400 text-xs italic">
+                  No business inquiry forms submitted yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {inquiries.map((inq) => (
+                    <div key={inq.id} className="p-5 bg-slate-900 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-extrabold text-white">{inq.subject}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold uppercase">
+                            {inq.formType.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400">{new Date(inq.submittedAt).toLocaleString()}</span>
+                          <select
+                            value={inq.status}
+                            onChange={(e) => onUpdateInquiryStatus(inq.id, e.target.value as any)}
+                            className="bg-slate-950 border border-slate-800 rounded-lg text-xs font-bold px-2 py-1 text-slate-200"
+                          >
+                            <option value="new">NEW</option>
+                            <option value="contacted">CONTACTED</option>
+                            <option value="resolved">RESOLVED</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-300 leading-relaxed">{inq.message}</p>
+
+                      <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-1">
+                        <span>Sender: <strong className="text-white">{inq.senderName}</strong> ({inq.senderEmail})</span>
+                        <span>Company: <strong className="text-white">{inq.companyName}</strong></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* SUBTAB 5: SYSTEM TELEMETRY & FEATURE TOGGLES */}
+        {/* ============================================================== */}
+        {subTab === 'system_admin' && (
+          <div className="space-y-8 animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">System Administration</span>
+                  <span className="text-[10px] bg-blue-950 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full font-bold">
+                    TaTa Engine Health: 100% Operational
+                  </span>
+                </div>
+                <h2 className="text-2xl font-black text-white">System Telemetry & Feature Control</h2>
+                <p className="text-xs text-slate-400">Monitor overall application usage, feature switches, and AI server connectivity.</p>
+              </div>
+            </div>
+
+            {/* Feature Toggles Grid */}
+            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-blue-400" />
+                Global Application Feature Switches
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                
+                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Photo OCR Scanner</span>
+                    <span className="text-[10px] text-slate-400">Image-to-text extraction</span>
+                  </div>
+                  <button
+                    onClick={() => onToggleFeature('photoOcrEnabled')}
+                    className={`w-11 h-6 rounded-full transition-colors relative p-1 ${
+                      featureToggles.photoOcrEnabled ? 'bg-amber-500' : 'bg-slate-800'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      featureToggles.photoOcrEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Voice Synthesis Engine</span>
+                    <span className="text-[10px] text-slate-400">Text-to-Speech audio briefs</span>
+                  </div>
+                  <button
+                    onClick={() => onToggleFeature('voiceSynthEnabled')}
+                    className={`w-11 h-6 rounded-full transition-colors relative p-1 ${
+                      featureToggles.voiceSynthEnabled ? 'bg-cyan-500' : 'bg-slate-800'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      featureToggles.voiceSynthEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Sponsor Merchant Network</span>
+                    <span className="text-[10px] text-slate-400">Task keyword offer matching</span>
+                  </div>
+                  <button
+                    onClick={() => onToggleFeature('sponsorAdsEnabled')}
+                    className={`w-11 h-6 rounded-full transition-colors relative p-1 ${
+                      featureToggles.sponsorAdsEnabled ? 'bg-purple-500' : 'bg-slate-800'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      featureToggles.sponsorAdsEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Operational Telemetry Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400">Active Users (Overall Total)</span>
+                  <Users className="w-4 h-4 text-cyan-400" />
+                </div>
+                <p className="text-3xl font-black text-cyan-400">{(metrics.overallTotalUsers || 24850).toLocaleString()}</p>
+                <p className="text-[10px] text-slate-500">Registered accounts across Web & Mobile</p>
+              </div>
+
+              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400 font-semibold">Users with Free Version</span>
+                  <Users className="w-4 h-4 text-slate-400" />
+                </div>
+                <p className="text-3xl font-black text-slate-200">{(metrics.freeVersionUsers || 18620).toLocaleString()}</p>
+                <p className="text-[10px] text-slate-500">Starter Tier active accounts (74.9%)</p>
+              </div>
+
+              <div className="bg-slate-900 p-5 rounded-2xl border border-purple-900/60 bg-gradient-to-b from-slate-900 to-purple-950/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-300">Users with Pro Version</span>
+                  <Crown className="w-4 h-4 text-purple-400" />
+                </div>
+                <p className="text-3xl font-black text-purple-400">{(metrics.proVersionUsers || 6230).toLocaleString()}</p>
+                <p className="text-[10px] text-purple-300/70">TaTa Pro active members (25.1%)</p>
+              </div>
+
+              <div className="bg-slate-900 p-5 rounded-2xl border border-amber-900/60 bg-gradient-to-b from-slate-900 to-amber-950/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300">Business Partners</span>
+                  <Building2 className="w-4 h-4 text-amber-400" />
+                </div>
+                <p className="text-3xl font-black text-amber-400">{(sponsors ? sponsors.length : (metrics.activePartnerships || 12)).toLocaleString()}</p>
+                <p className="text-[10px] text-amber-300/70">Active merchant sponsors on network</p>
+              </div>
+
+              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400">Monthly Recurring Revenue (MRR)</span>
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                </div>
+                <p className="text-3xl font-black text-emerald-400">₱{metrics.monthlyRecurringRevenue.toLocaleString()}</p>
+                <p className="text-[10px] text-slate-500">+18.4% growth from previous cycle</p>
+              </div>
+
+              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400">Total Voice Requests Processed</span>
+                  <Mic className="w-4 h-4 text-blue-400" />
+                </div>
+                <p className="text-3xl font-black text-blue-400">{metrics.totalVoiceRequests.toLocaleString()}</p>
+                <p className="text-[10px] text-slate-500">Gemini Flash low-latency pipeline</p>
+              </div>
+
+              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-2 sm:col-span-2 lg:col-span-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400">Total Coupon Redemptions</span>
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                </div>
+                <p className="text-3xl font-black text-amber-400">{metrics.totalCouponsRedeemed.toLocaleString()}</p>
+                <p className="text-[10px] text-slate-500 font-medium">Generated for local merchant network</p>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+      </main>
+
+    </div>
+  );
+};

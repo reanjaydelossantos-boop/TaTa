@@ -1,0 +1,1095 @@
+import React, { useState, useRef } from 'react';
+import { UserPlan, MeetingAnalysis, OwnerDecision } from '../types';
+import { SAMPLE_MEETING_ANALYSIS } from '../data/mockData';
+import { speechController } from '../utils/speech';
+import { 
+  Mic, Square, Upload, Loader2, Sparkles, CheckCircle2, FileText, 
+  HelpCircle, Crown, FileAudio, Trash2, Check, X, Edit3, 
+  UserCheck, AlertCircle, Info, ArrowRight, ShieldAlert, CornerDownRight,
+  Volume2, VolumeX, ChevronDown, ChevronUp, Play, Pause, RefreshCw, RotateCcw,
+  Camera, Image, FileImage
+} from 'lucide-react';
+
+interface MeetingIntelligenceProProps {
+  userPlan: UserPlan;
+  onOpenPricing: () => void;
+  onPushActionItemsToReminders: (tasks: { title: string; category: any; time: string }[]) => void;
+  sessions: MeetingAnalysis[];
+  activeSessionId: string | null;
+  onSelectSession: (id: string) => void;
+  onSaveNewSession: (session: MeetingAnalysis) => void;
+  onUpdateOwnerDecision: (sessionId: string, decision: OwnerDecision) => void;
+  onDeleteSession: (id: string) => void;
+  onReplaceSession?: (oldId: string, newSession: MeetingAnalysis) => void;
+}
+
+export const MeetingIntelligencePro: React.FC<MeetingIntelligenceProProps> = ({
+  userPlan,
+  onOpenPricing,
+  onPushActionItemsToReminders,
+  sessions,
+  activeSessionId,
+  onSelectSession,
+  onSaveNewSession,
+  onUpdateOwnerDecision,
+  onDeleteSession,
+  onReplaceSession
+}) => {
+  const [meetingTitle, setMeetingTitle] = useState('Executive Strategy & Audio Memo');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [photoImageBlob, setPhotoImageBlob] = useState<Blob | null>(null);
+  const [photoImageUrl, setPhotoImageUrl] = useState<string | null>(null);
+  const [pastedNotes, setPastedNotes] = useState('');
+  
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [activeViewTab, setActiveViewTab] = useState<'summary' | 'matrix' | 'transcript' | 'decisions' | 'actions'>('summary');
+  const [pushedSuccessNotice, setPushedSuccessNotice] = useState(false);
+
+  // Audio Session Replace Mode State
+  const [replacingSessionId, setReplacingSessionId] = useState<string | null>(null);
+
+  // Summary Audio Playback & Decision Helper Sign State
+  const [isSpeakingSummary, setIsSpeakingSummary] = useState(false);
+  const [showDecisionHelper, setShowDecisionHelper] = useState(false);
+
+  // Custom Owner Decision State Input
+  const [customOwnerNote, setCustomOwnerNote] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerIntervalRef = useRef<any>(null);
+
+  // Active Session
+  const currentSession = sessions.find(s => s.id === activeSessionId) || sessions[0] || SAMPLE_MEETING_ANALYSIS;
+
+  const handleToggleAudioSummary = () => {
+    if (isSpeakingSummary) {
+      speechController.stopSpeaking();
+      setIsSpeakingSummary(false);
+    } else {
+      if (currentSession?.executiveSummary) {
+        setIsSpeakingSummary(true);
+        speechController.speak(currentSession.executiveSummary, () => {
+          setIsSpeakingSummary(false);
+        });
+      }
+    }
+  };
+
+  // Convert Blob to Base64 reliably without stack limits or main thread freeze
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1] || '';
+        resolve(base64);
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  // Start Live Audio Recording with parallel speech recognition
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const url = URL.createObjectURL(audioBlob);
+        setRecordedAudioBlob(audioBlob);
+        setRecordedAudioUrl(url);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start(1000);
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      // Try parallel real-time speech recognition
+      if (speechController.isSupported()) {
+        speechController.startListening({
+          onResult: (transcript) => {
+            if (transcript.trim()) {
+              setPastedNotes(transcript);
+            }
+          },
+          onError: (err) => {
+            console.log('Speech recognition note:', err);
+          },
+          onEnd: () => {}
+        });
+      }
+
+      timerIntervalRef.current = setInterval(() => {
+        setRecordingSeconds(prev => prev + 1);
+      }, 1000);
+    } catch (err: any) {
+      alert('Could not access microphone: ' + err.message);
+    }
+  };
+
+  // Stop Live Audio Recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      speechController.stopListening();
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    }
+  };
+
+  // Format Recording Timer
+  const formatTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remain = secs % 60;
+    return `${mins.toString().padStart(2, '0')}:${remain.toString().padStart(2, '0')}`;
+  };
+
+  // Audio File Upload Handler
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setRecordedAudioBlob(file);
+      setRecordedAudioUrl(URL.createObjectURL(file));
+      if (!meetingTitle || meetingTitle === 'Executive Strategy & Audio Memo') {
+        setMeetingTitle(file.name.replace(/\.[^/.]+$/, ""));
+      }
+    }
+  };
+
+  // Photo / Whiteboard Entry Upload Handler
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhotoImageBlob(file);
+      const url = URL.createObjectURL(file);
+      setPhotoImageUrl(url);
+      if (!meetingTitle || meetingTitle === 'Executive Strategy & Audio Memo') {
+        setMeetingTitle(`Photo Memo: ${file.name.replace(/\.[^/.]+$/, "")}`);
+      }
+    }
+  };
+
+  const handleClearPhoto = () => {
+    setPhotoImageBlob(null);
+    setPhotoImageUrl(null);
+  };
+
+  // Process Audio or Photo or Text with Gemini AI Endpoint
+  const handleProcessMeeting = async () => {
+    setIsProcessing(true);
+    setPushedSuccessNotice(false);
+
+    try {
+      let base64AudioData = '';
+      let mimeType = 'audio/webm';
+      let base64ImageData = '';
+      let imageMimeType = 'image/jpeg';
+
+      if (recordedAudioBlob) {
+        mimeType = recordedAudioBlob.type || 'audio/webm';
+        base64AudioData = await blobToBase64(recordedAudioBlob);
+      }
+
+      if (photoImageBlob) {
+        imageMimeType = photoImageBlob.type || 'image/jpeg';
+        base64ImageData = await blobToBase64(photoImageBlob);
+      }
+
+      const response = await fetch('/api/process-audio-meeting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioData: base64AudioData || undefined,
+          audioMimeType: mimeType,
+          imageData: base64ImageData || undefined,
+          imageMimeType: imageMimeType,
+          textContent: pastedNotes.trim() || undefined,
+          meetingTitle: meetingTitle.trim() || (photoImageBlob ? 'Photo Document OCR' : 'Voice & Audio Memo')
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        const targetId = replacingSessionId || `pro-session-${Date.now()}`;
+        const newSession: MeetingAnalysis = {
+          ...data,
+          id: targetId,
+          createdAt: new Date().toISOString(),
+          source: photoImageBlob ? 'photo_ocr' : recordedAudioBlob ? 'recorded_audio' : pastedNotes ? 'notes' : 'voice_assistant',
+          audioUrl: recordedAudioUrl || undefined,
+          imageUrl: photoImageUrl || undefined,
+          ownerDecision: {
+            status: 'pending'
+          }
+        };
+
+        if (replacingSessionId && onReplaceSession) {
+          onReplaceSession(replacingSessionId, newSession);
+          setReplacingSessionId(null);
+        } else {
+          onSaveNewSession(newSession);
+        }
+        onSelectSession(newSession.id);
+
+        // Clear inputs
+        setRecordedAudioBlob(null);
+        setRecordedAudioUrl(null);
+        setPhotoImageBlob(null);
+        setPhotoImageUrl(null);
+        setPastedNotes('');
+      } else {
+        alert('Failed to process session: ' + (data.error || 'Server error'));
+      }
+    } catch (err: any) {
+      console.error('Error processing meeting:', err);
+      alert('Error processing meeting audio/photo: ' + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Convert Action Items into Reminders
+  const handlePushActions = () => {
+    if (!currentSession?.actionItems) return;
+    const mapped = currentSession.actionItems.map(ai => ({
+      title: `${ai.task} (Owner: ${ai.owner})`,
+      category: 'Work' as const,
+      time: ai.deadline || 'Today at 5:00 PM'
+    }));
+    onPushActionItemsToReminders(mapped);
+    setPushedSuccessNotice(true);
+    setTimeout(() => setPushedSuccessNotice(false), 4000);
+  };
+
+  // Owner Decision Handlers
+  const handleAcceptOption = (optionTitle: string) => {
+    if (!currentSession?.id) return;
+    const updatedDecision: OwnerDecision = {
+      status: 'accepted',
+      selectedOption: optionTitle,
+      decidedAt: new Date().toISOString()
+    };
+    onUpdateOwnerDecision(currentSession.id, updatedDecision);
+  };
+
+  const handleSaveCustomOwnerDecision = () => {
+    if (!currentSession?.id || !customOwnerNote.trim()) return;
+    const updatedDecision: OwnerDecision = {
+      status: 'custom',
+      ownerNotes: customOwnerNote.trim(),
+      decidedAt: new Date().toISOString()
+    };
+    onUpdateOwnerDecision(currentSession.id, updatedDecision);
+    setShowCustomInput(false);
+    setCustomOwnerNote('');
+  };
+
+  const getSourceBadge = (source?: string) => {
+    switch (source) {
+      case 'voice_assistant':
+        return <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 text-[10px] font-bold">Voice Assistant</span>;
+      case 'recorded_audio':
+        return <span className="px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold">Live Recorded Audio</span>;
+      case 'uploaded_file':
+        return <span className="px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800 text-[10px] font-bold">Uploaded Audio File</span>;
+      case 'photo_ocr':
+        return <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 text-[10px] font-bold">📷 Photo Document OCR</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold">Audio/Photo Session</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-indigo-950 via-purple-950 to-slate-900 rounded-2xl border border-purple-800/80 p-6 shadow-2xl relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-900/80 border border-purple-700 text-purple-200 text-xs font-semibold mb-3">
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span>Pro Audio Intelligence & AI Decision Matrix</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Voice Audio Sessions & Executive Decision Support
+            </h2>
+            <p className="text-sm text-slate-300 mt-2 leading-relaxed">
+              Every voice recording is automatically saved into Pro Audio, summarized immediately, and evaluated in an <strong>AI Decision Matrix</strong>. The AI provides advisory suggestions — <strong>you as the owner decide what to follow!</strong>
+            </p>
+          </div>
+
+          {userPlan !== 'premium' && (
+            <button
+              id="btn-upgrade-pro-banner"
+              onClick={onOpenPricing}
+              className="bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-extrabold px-5 py-3 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 hover:scale-105 transition-all shrink-0"
+            >
+              <Crown className="w-4 h-4" />
+              <span>Unlock Premium Pro ($12.99)</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* SAVED PRO AUDIO SESSIONS DRAWER / SELECTOR */}
+      <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-xl space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <FileAudio className="w-5 h-5 text-cyan-400" />
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              Saved Audio & Voice Recordings ({sessions.length})
+            </h3>
+          </div>
+          <span className="text-xs text-slate-400">Click any recording to view its immediate summary & matrix</span>
+        </div>
+
+        {/* Sessions Horizontal Selector */}
+        <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin scrollbar-thumb-slate-700">
+          {sessions.map((sess) => {
+            const isSelected = sess.id === currentSession.id;
+            const isOwnerDecided = sess.ownerDecision?.status && sess.ownerDecision.status !== 'pending';
+
+            return (
+              <div
+                key={sess.id || sess.meetingTitle}
+                onClick={() => sess.id && onSelectSession(sess.id)}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer min-w-[240px] max-w-[280px] shrink-0 relative group ${
+                  isSelected 
+                    ? 'bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 border-cyan-400/80 ring-2 ring-cyan-500/30 shadow-lg' 
+                    : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  {getSourceBadge(sess.source)}
+                  
+                  {/* Delete & Replace Actions */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (sess.id) {
+                          setReplacingSessionId(sess.id);
+                          setMeetingTitle(sess.meetingTitle);
+                          const elem = document.getElementById('section-record-new-audio');
+                          if (elem) elem.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      }}
+                      className="p-1 rounded bg-slate-800 hover:bg-cyan-950 text-slate-400 hover:text-cyan-300 transition-colors flex items-center gap-1 text-[10px] px-1.5 border border-slate-700/60"
+                      title="Replace recording"
+                    >
+                      <RefreshCw className="w-3 h-3 text-cyan-400" />
+                      <span>Replace</span>
+                    </button>
+
+                    {sess.id !== 'sample-meeting-1' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (sess.id) onDeleteSession(sess.id);
+                        }}
+                        className="p-1 rounded bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition-colors flex items-center gap-1 text-[10px] px-1.5 border border-slate-700/60"
+                        title="Delete recording"
+                      >
+                        <Trash2 className="w-3 h-3 text-rose-400" />
+                        <span>Delete</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <h4 className="font-bold text-white text-xs line-clamp-1 group-hover:text-cyan-300 transition-colors">
+                  {sess.meetingTitle}
+                </h4>
+
+                <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+                  {sess.executiveSummary}
+                </p>
+
+                {/* Owner Decision Tag */}
+                <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+                  <span className="text-slate-500">Owner Decision:</span>
+                  {isOwnerDecided ? (
+                    <span className="font-bold text-emerald-400 flex items-center gap-1 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800">
+                      <UserCheck className="w-3 h-3 text-emerald-400" />
+                      {sess.ownerDecision?.status === 'accepted' ? 'Accepted Option' : 'Custom Note'}
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-amber-400 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-800">
+                      Pending Choice
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Audio & Photo Capture & Processing Box */}
+      <div id="section-record-new-audio" className="bg-slate-900/90 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <span>Record Audio, Photo Document, or Upload File</span>
+              <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800/80 px-2 py-0.5 rounded-full font-extrabold uppercase">Photo-to-Text OCR Enabled</span>
+            </h3>
+            <p className="text-xs text-slate-400">Record a live voice memo, snap/upload meeting photos or whiteboard notes, or upload audio/MP4 files for instant AI text extraction and decision matrix.</p>
+          </div>
+        </div>
+
+        {/* Replace Notice Banner */}
+        {replacingSessionId && (
+          <div className="p-3 rounded-xl bg-cyan-950/90 border border-cyan-700 text-cyan-200 text-xs flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-cyan-400 animate-spin" />
+              <span>Replacing Session: <strong>"{sessions.find(s => s.id === replacingSessionId)?.meetingTitle || 'Active Recording'}"</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplacingSessionId(null)}
+              className="text-slate-400 hover:text-white text-xs underline font-bold"
+            >
+              Cancel Replace
+            </button>
+          </div>
+        )}
+
+        {/* Meeting Title Input */}
+        <div>
+          <label className="text-xs text-slate-300 font-semibold block mb-1">Session Title / Subject</label>
+          <input
+            id="input-meeting-title"
+            type="text"
+            value={meetingTitle}
+            onChange={(e) => setMeetingTitle(e.target.value)}
+            placeholder="e.g. Executive Strategy Memo, Whiteboard Notes, Purchasing Decision..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:ring-1 focus:ring-purple-500"
+          />
+        </div>
+
+        {/* Recording Controls, Photo Entry, & File Upload Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          {/* 1. Live Microphone Recording Box */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col items-center justify-between text-center relative min-h-[170px]">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Mic className="w-3.5 h-3.5 text-rose-400" />
+              Live Microphone
+            </span>
+
+            {recordedAudioUrl && !isRecording && (
+              <div className="mb-2 w-full p-1.5 bg-slate-900 rounded-lg border border-slate-800">
+                <audio controls src={recordedAudioUrl} className="w-full h-8" />
+              </div>
+            )}
+
+            <div className="flex flex-col items-center my-1">
+              {!isRecording ? (
+                <button
+                  id="btn-start-meeting-recording"
+                  type="button"
+                  onClick={startRecording}
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white shadow-xl shadow-rose-600/40 ring-4 ring-rose-500/20 active:scale-95 transition-all flex items-center justify-center group"
+                  title="Tap Microphone Icon to Record"
+                >
+                  <Mic className="w-7 h-7 text-white group-hover:scale-110 transition-transform" />
+                </button>
+              ) : (
+                <button
+                  id="btn-stop-meeting-recording"
+                  type="button"
+                  onClick={stopRecording}
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-950 border-4 border-rose-500 text-rose-500 shadow-2xl shadow-rose-500/50 ring-4 ring-rose-600/30 animate-pulse active:scale-95 transition-all flex items-center justify-center"
+                  title="Tap Icon to Stop Recording"
+                >
+                  <Square className="w-7 h-7 fill-rose-500 text-rose-500" />
+                </button>
+              )}
+
+              <span className="text-[11px] font-bold text-rose-300 mt-2">
+                {isRecording ? `REC ${formatTime(recordingSeconds)}` : 'Tap to Record'}
+              </span>
+            </div>
+          </div>
+
+          {/* 2. Photo Entry (Audio/Photo to Text) Box */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between relative min-h-[170px]">
+            <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-amber-400" />
+                Photo Entry (OCR)
+              </span>
+              <span className="text-[9px] bg-amber-900/60 text-amber-200 px-1.5 py-0.2 rounded">Photo-to-Text</span>
+            </span>
+
+            {photoImageUrl ? (
+              <div className="relative border border-amber-500/40 rounded-lg p-2 bg-amber-950/30 flex flex-col items-center justify-center text-center my-auto">
+                <img 
+                  src={photoImageUrl} 
+                  alt="Captured Photo Document" 
+                  className="max-h-20 object-contain rounded border border-slate-700 shadow-md mb-2" 
+                />
+                <div className="flex items-center justify-between w-full px-1">
+                  <span className="text-[10px] text-amber-200 font-bold truncate max-w-[130px]">
+                    {photoImageBlob?.name || 'Photo Ready'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearPhoto}
+                    className="text-[10px] text-rose-400 hover:text-rose-300 font-bold bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="relative border border-dashed border-amber-800/60 hover:border-amber-500/80 rounded-lg p-3 text-center cursor-pointer transition-colors bg-slate-900/40 my-auto">
+                <input
+                  id="input-upload-photo-doc"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handlePhotoUpload}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className="p-2 rounded-full bg-amber-950/80 border border-amber-700/60">
+                    <Camera className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <span className="text-xs text-amber-200 font-bold">Snap or Upload Photo</span>
+                  <p className="text-[10px] text-slate-400 leading-tight">Whiteboards, handwritten memos, or document photos</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Audio / Video File Upload Box */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between relative min-h-[170px]">
+            <span className="text-[11px] font-bold text-slate-200 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Upload className="w-3.5 h-3.5 text-purple-400" />
+              Upload File (.mp3, .mp4, .m4a)
+            </span>
+
+            <div className="relative border border-dashed border-slate-800 hover:border-purple-500/50 rounded-lg p-3 text-center cursor-pointer transition-colors bg-slate-900/40 my-auto">
+              <input
+                id="input-upload-meeting-audio"
+                type="file"
+                accept="audio/*,video/mp4,video/x-m4v,video/*,.mp3,.wav,.m4a,.mp4"
+                onChange={handleFileUpload}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="p-2 rounded-full bg-purple-950/80 border border-purple-700/60">
+                  <Upload className="w-5 h-5 text-purple-400" />
+                </div>
+                <span className="text-xs text-purple-200 font-bold">Select Audio / MP4 File</span>
+                <p className="text-[10px] text-slate-400 leading-tight">MP3, WAV, M4A, or MP4 video recordings</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Or Paste Audio Speech Notes */}
+        <div>
+          <label className="text-xs text-slate-400 font-medium block mb-1">Or Enter Additional Speech Notes / Text Context:</label>
+          <textarea
+            id="textarea-pasted-notes"
+            rows={2}
+            value={pastedNotes}
+            onChange={(e) => setPastedNotes(e.target.value)}
+            placeholder="Enter audio speech notes, whiteboard details, or text transcript..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:ring-1 focus:ring-purple-500 resize-none"
+          />
+        </div>
+
+        {/* Submit Button */}
+        <button
+          id="btn-process-meeting-ai"
+          onClick={handleProcessMeeting}
+          disabled={isProcessing}
+          className="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 disabled:opacity-50 text-white font-extrabold py-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-purple-600/20 transition-all"
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Analyzing Input & Extracting Text / Decision Matrix...</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-5 h-5 text-amber-300" />
+              <span>
+                {photoImageBlob
+                  ? 'Process Photo & Convert to Text (OCR)'
+                  : recordedAudioBlob
+                    ? 'Process Audio & Generate Decision Matrix'
+                    : 'Process Audio / Photo & Save to Pro Page'}
+              </span>
+            </>
+          )}
+        </button>
+
+      </div>
+
+      {/* Success Notice when Action Items pushed */}
+      {pushedSuccessNotice && (
+        <div className="p-4 rounded-xl bg-emerald-950 border border-emerald-700 text-emerald-200 text-xs flex items-center gap-2 shadow-lg animate-fadeIn">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span><strong>Action Items Pushed!</strong> Tasks converted into daily task reminders with local sponsor discounts matched.</span>
+        </div>
+      )}
+
+      {/* ACTIVE SESSION DISPLAY */}
+      {currentSession && (
+        <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-6 shadow-2xl space-y-5">
+          
+          {/* Analysis Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Active Pro Analysis</span>
+                {getSourceBadge(currentSession.source)}
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5">{currentSession.meetingTitle}</h3>
+              <p className="text-xs text-slate-400 mt-1">Duration: <strong className="text-slate-200">{currentSession.duration}</strong></p>
+            </div>
+
+            <button
+              id="btn-push-action-reminders"
+              onClick={handlePushActions}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all active:scale-95 shrink-0"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Push Action Items to Task List</span>
+            </button>
+          </div>
+
+          {/* Source Photo Document Display if present */}
+          {currentSession.imageUrl && (
+            <div className="p-3 bg-amber-950/40 border border-amber-800/60 rounded-xl flex items-center gap-4 shadow-md">
+              <img 
+                src={currentSession.imageUrl} 
+                alt="Source Document Photo" 
+                className="w-16 h-16 object-cover rounded-lg border border-amber-600/50 shadow-md shrink-0 cursor-pointer hover:scale-105 transition-transform" 
+                onClick={() => window.open(currentSession.imageUrl, '_blank')}
+                title="Click to view full image"
+              />
+              <div className="text-xs space-y-1">
+                <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5 text-amber-400" />
+                  Source Photo Document (OCR Extracted)
+                </span>
+                <p className="text-slate-300 text-[11px]">
+                  Extracted whiteboard content, handwritten memos, or printed text into the transcript and decision matrix below.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* AUDIO SUMMARY TEXT & LISTEN TO SUMMARY OPTION */}
+          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-cyan-400" />
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider">Audio Summary</h4>
+              </div>
+
+              {/* Listen to Audio Summary Button */}
+              <button
+                type="button"
+                id="btn-listen-audio-summary"
+                onClick={handleToggleAudioSummary}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+                  isSpeakingSummary
+                    ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-600/30 animate-pulse'
+                    : 'bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border-cyan-800 hover:border-cyan-700 shadow-sm'
+                }`}
+              >
+                {isSpeakingSummary ? (
+                  <>
+                    <VolumeX className="w-4 h-4 text-white" />
+                    <span>Stop Listening</span>
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-4 h-4 text-cyan-400" />
+                    <span>Listen to Audio Summary</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal">
+              {currentSession.executiveSummary}
+            </p>
+          </div>
+
+          {/* CLICKABLE SIGN / REMINDER FOR DECISION ASSISTANCE */}
+          <div
+            id="sign-need-decision-help"
+            onClick={() => {
+              const nextState = !showDecisionHelper;
+              setShowDecisionHelper(nextState);
+              if (nextState) setActiveViewTab('matrix');
+            }}
+            className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/90 via-purple-950/90 to-slate-950 border border-purple-500/60 hover:border-purple-400 transition-all cursor-pointer shadow-xl group"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-purple-900/60 border border-purple-700 text-amber-300 shrink-0 group-hover:scale-105 transition-transform">
+                  <HelpCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
+                      Need Help Making a Decision?
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                      Decision Assistance
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    We can help you evaluate options, weigh pros & cons, and guide you to the best decision. <strong>Click here to view AI Decision Matrix</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 p-2 rounded-xl bg-slate-900 border border-slate-800 text-cyan-400 group-hover:bg-purple-900 transition-colors">
+                {(showDecisionHelper || activeViewTab === 'matrix') ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto scrollbar-none">
+            <button
+              id="tab-output-summary"
+              onClick={() => setActiveViewTab('summary')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                activeViewTab === 'summary' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Audio Summary
+            </button>
+            <button
+              id="tab-output-matrix"
+              onClick={() => {
+                setActiveViewTab('matrix');
+                setShowDecisionHelper(true);
+              }}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                activeViewTab === 'matrix' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-300 hover:text-white'
+              }`}
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-amber-300" />
+              <span>AI Decision Matrix & Owner Choice</span>
+            </button>
+            <button
+              id="tab-output-actions"
+              onClick={() => setActiveViewTab('actions')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                activeViewTab === 'actions' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Action Items ({currentSession.actionItems?.length || 0})
+            </button>
+            <button
+              id="tab-output-decisions"
+              onClick={() => setActiveViewTab('decisions')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                activeViewTab === 'decisions' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Key Takeaways ({currentSession.keyDecisions?.length || 0})
+            </button>
+            <button
+              id="tab-output-transcript"
+              onClick={() => setActiveViewTab('transcript')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                activeViewTab === 'transcript' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Verbatim Audio Log
+            </button>
+          </div>
+
+          {/* VIEW 1: AI DECISION MATRIX & OWNER DECISION CONTROL */}
+          {activeViewTab === 'matrix' && (
+            <div className="space-y-5">
+              
+              {/* OWNER DECISION STATUS BANNER */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 border border-purple-500/40 shadow-inner space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-5 h-5 text-cyan-400 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-bold text-cyan-300 uppercase tracking-wider">
+                        Owner Final Decision Control
+                      </h4>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        {currentSession.ownerDecision?.status === 'accepted' ? (
+                          <span className="text-emerald-300 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Owner Accepted: "{currentSession.ownerDecision.selectedOption}"
+                          </span>
+                        ) : currentSession.ownerDecision?.status === 'custom' ? (
+                          <span className="text-cyan-200 font-bold flex items-center gap-1">
+                            <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
+                            Custom Owner Note: "{currentSession.ownerDecision.ownerNotes}"
+                          </span>
+                        ) : (
+                          <span className="text-amber-300 font-semibold">
+                            AI suggestions displayed below. Owner choice is pending your decision.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomInput(!showCustomInput)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold text-xs border border-slate-700 flex items-center gap-1.5 transition-colors shrink-0"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{showCustomInput ? 'Cancel Note' : 'Enter Custom Decision'}</span>
+                  </button>
+                </div>
+
+                {/* Custom Decision Text Box */}
+                {showCustomInput && (
+                  <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
+                    <label className="text-xs text-slate-300 font-medium block">
+                      Write your custom owner decision or modification:
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={customOwnerNote}
+                        onChange={(e) => setCustomOwnerNote(e.target.value)}
+                        placeholder="e.g. Combine Option 1 with budget cap, or reject both..."
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-1 focus:ring-cyan-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveCustomOwnerDecision}
+                        className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0"
+                      >
+                        Save Decision
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* CORE QUESTION CALLOUT */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/80 to-purple-950/80 border border-indigo-800/80">
+                <div className="flex items-center gap-2 mb-1">
+                  <HelpCircle className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-300 uppercase">Evaluated Core Strategic Question</span>
+                </div>
+                <p className="text-sm font-extrabold text-white">{currentSession.decisionMatrix.coreQuestion}</p>
+              </div>
+
+              {/* OPTIONS COMPARISON GRID */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {currentSession.decisionMatrix.optionsEvaluated.map((opt, idx) => {
+                  const isAcceptedByOwner = currentSession.ownerDecision?.selectedOption === opt.option;
+                  const isAiRecommended = opt.option.includes(currentSession.decisionMatrix.recommendedChoice);
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                        isAcceptedByOwner
+                          ? 'bg-gradient-to-b from-emerald-950/80 to-slate-950 border-emerald-500 ring-2 ring-emerald-500/40 shadow-xl'
+                          : isAiRecommended
+                          ? 'bg-slate-950 border-purple-500/80 ring-1 ring-purple-500/30'
+                          : 'bg-slate-950 border-slate-800'
+                      }`}
+                    >
+                      <div>
+                        {/* Header Badges */}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <h5 className="text-sm font-extrabold text-white">{opt.option}</h5>
+                          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-purple-950 text-purple-300 font-bold border border-purple-800">
+                            Score: {opt.score}
+                          </span>
+                        </div>
+
+                        {/* Owner & AI Status Badges */}
+                        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                          {isAiRecommended && (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              AI Advisory Suggestion
+                            </span>
+                          )}
+                          {isAcceptedByOwner && (
+                            <span className="text-[10px] px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 font-bold flex items-center gap-1">
+                              <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                              Owner Final Decision
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Pros & Cons */}
+                        <div className="space-y-2 my-3 text-xs leading-relaxed">
+                          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                            <strong className="text-emerald-400 block font-bold mb-0.5">Pros / Advantages:</strong>
+                            <span className="text-slate-200">{opt.pros}</span>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                            <strong className="text-rose-400 block font-bold mb-0.5">Cons / Disadvantages:</strong>
+                            <span className="text-slate-200">{opt.cons}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer & Action Button */}
+                      <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                        <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                          opt.riskLevel === 'Low' ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'
+                        }`}>
+                          {opt.riskLevel} Risk
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptOption(opt.option)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            isAcceptedByOwner
+                              ? 'bg-emerald-600 text-white shadow-md'
+                              : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border border-slate-700'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>{isAcceptedByOwner ? 'Owner Selected' : 'Select as Owner Choice'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* RATIONALE & OWNER DISCLAIMER */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-cyan-800/80 text-xs space-y-2">
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-cyan-400" />
+                  <strong className="text-cyan-300 font-bold">AI Rationale & Owner Disclaimer:</strong>
+                </div>
+                <p className="text-slate-200 leading-relaxed">{currentSession.decisionMatrix.rationale}</p>
+                <p className="text-[11px] text-slate-400 italic pt-1 border-t border-slate-800">
+                  Note: AI provides objective evaluation matrices purely as advisory suggestions. You as the owner decide what path to follow.
+                </p>
+              </div>
+
+            </div>
+          )}
+
+          {/* VIEW 2: EXECUTIVE SUMMARY */}
+          {activeViewTab === 'summary' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                <h4 className="text-xs font-bold text-purple-300 uppercase mb-2">Executive Synopsis</h4>
+                <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">{currentSession.executiveSummary}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                  <h4 className="text-xs font-bold text-emerald-400 uppercase mb-2">Key Takeaways</h4>
+                  <ul className="space-y-2">
+                    {currentSession.keyDecisions.map((dec, i) => (
+                      <li key={i} className="text-xs text-slate-300 flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <span>{dec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                  <h4 className="text-xs font-bold text-amber-400 uppercase mb-2">AI Suggested Choice</h4>
+                  <p className="text-xs font-bold text-white">{currentSession.decisionMatrix.recommendedChoice}</p>
+                  <p className="text-xs text-slate-300 mt-1">{currentSession.decisionMatrix.rationale}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 3: ACTION ITEMS */}
+          {activeViewTab === 'actions' && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">Action items extracted from audio session:</p>
+              <div className="space-y-2">
+                {currentSession.actionItems.map((act, idx) => (
+                  <div key={idx} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <h5 className="text-xs font-semibold text-white">{act.task}</h5>
+                      <span className="text-[11px] text-slate-400 mt-0.5 block">
+                        Assigned Owner: <strong className="text-cyan-400">{act.owner}</strong> • Deadline: <strong className="text-amber-300">{act.deadline}</strong>
+                      </span>
+                    </div>
+                    <span className="px-2 py-1 rounded bg-slate-800 text-slate-300 text-[10px] font-medium shrink-0">
+                      Action Item
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 4: KEY TAKEAWAYS */}
+          {activeViewTab === 'decisions' && (
+            <div className="space-y-3">
+              <ul className="space-y-2">
+                {currentSession.keyDecisions.map((dec, i) => (
+                  <li key={i} className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <span className="font-medium">{dec}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* VIEW 5: VERBATIM TRANSCRIPT */}
+          {activeViewTab === 'transcript' && (
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+              {currentSession.transcript.map((t, idx) => (
+                <div key={idx} className="p-3 rounded-xl bg-slate-950 border border-slate-800/80">
+                  <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider block mb-1">
+                    {t.speaker}
+                  </span>
+                  <p className="text-xs text-slate-200">{t.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+        </div>
+      )}
+
+    </div>
+  );
+};
